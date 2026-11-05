@@ -1,0 +1,45 @@
+name: Weekly upstream draft PR
+
+on:
+  schedule:
+    - cron: '0 22 * * 0' # Monday 06:00 Asia/Shanghai
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-upstream-draft
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Update upstream snapshot and draft PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          git remote add upstream https://github.com/Wei-Shaw/sub2api.git
+          git fetch upstream main
+          git fetch origin main
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo 'Upstream main is already included.'
+            exit 0
+          fi
+          branch=sync/upstream-main
+          git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || true
+          previous=$(git rev-parse --verify "refs/remotes/origin/$branch" 2>/dev/null || true)
+          git push "--force-with-lease=refs/heads/$branch:$previous" origin "upstream/main:refs/heads/$branch"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "Updated existing upstream draft PR #$existing"
+            exit 0
+          fi
+          printf 'Weekly upstream main snapshot for review.\n\nUpstream commit: `%s`\n\nMerge into main after reviewing compatibility with the custom Claude Code API key mode.\n' "$(git rev-parse upstream/main)" > "$RUNNER_TEMP/upstream-pr.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --draft --title 'chore: sync upstream main' --body-file "$RUNNER_TEMP/upstream-pr.md"

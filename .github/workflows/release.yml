@@ -32,7 +32,7 @@ jobs:
             release_tag="$GITHUB_REF_NAME"
             prerelease=false
           else
-            version="$(cat backend/cmd/server/VERSION)-fork.$(git rev-parse --short HEAD)"
+            version="$(cat backend/cmd/server/VERSION)"
             channel=main
             release_tag=main
             prerelease=true
