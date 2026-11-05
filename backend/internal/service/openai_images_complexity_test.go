@@ -30,12 +30,14 @@ func TestOpenAIImagesComplexityForwarding(t *testing.T) {
 	}{
 		{name: "flare25_high", model: "gpt-image-2.5-flare", complexity: "high", direct: true},
 		{name: "sunburst25_snapshot_medium", model: "gpt-image-2.5-sunburst-2026-09-08", complexity: "medium", direct: true},
-		{name: "flare26_low", model: "gpt-image-2.6-flare", complexity: "low"},
-		{name: "sunburst26_medium", model: "gpt-image-2.6-sunburst", complexity: "medium"},
-		{name: "mapped_model", model: "gpt-image-2", mappedModel: "gpt-image-2.6-flare", complexity: "high"},
-		{name: "setup_token", model: "gpt-image-2.6-flare", complexity: "low", accountType: AccountTypeSetupToken},
+		{name: "flare26_low", model: "gpt-image-2.6-flare", complexity: "low", direct: true},
+		{name: "sunburst26_medium", model: "gpt-image-2.6-sunburst", complexity: "medium", direct: true},
+		{name: "mapped_model", model: "gpt-image-2", mappedModel: "gpt-image-2.6-flare", complexity: "high", direct: true},
+		{name: "setup_token", model: "gpt-image-2.6-flare", complexity: "low", accountType: AccountTypeSetupToken, direct: true},
 		{name: "direct_omitted", model: "gpt-image-2.5-flare", direct: true},
-		{name: "responses_omitted", model: "gpt-image-2.6-flare"},
+		{name: "flare26_omitted", model: "gpt-image-2.6-flare", direct: true},
+		{name: "sunburst26_omitted", model: "gpt-image-2.6-sunburst", direct: true},
+		{name: "responses_omitted", model: "gpt-image-future-test"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			for _, edits := range []bool{false, true} {
@@ -108,7 +110,7 @@ func TestOpenAIImagesComplexityMultipartEdit(t *testing.T) {
 			c.Request.Header.Set("Content-Type", w.FormDataContentType())
 			upstream := &httpUpstreamRecorder{resp: complexityResponsesTestResponse()}
 			prefix := "tools.0."
-			if model == "gpt-image-2.5-flare" {
+			if usesCodexDirectImages(model) {
 				upstream.resp = openAIImagesJSONResponse()
 				prefix = ""
 			}
