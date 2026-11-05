@@ -468,7 +468,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	// 确定目标 URL
 	targetURL := claudeAPICountTokensURL
 	baseURL := ""
-	if account.Type == AccountTypeAPIKey {
+	if account.Type == AccountTypeAPIKey || account.IsClaudeCodeAPIKey() {
 		baseURL = getAnthropicGatewayBaseURL(account)
 		if baseURL != "" {
 			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
@@ -554,7 +554,9 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// 设置认证头（保持原始大小写）
-	if tokenType == "oauth" {
+	if account.IsClaudeCodeAPIKey() {
+		setHeaderRaw(req.Header, "x-api-key", token)
+	} else if tokenType == "oauth" {
 		setHeaderRaw(req.Header, "authorization", "Bearer "+token)
 	} else {
 		// Ollama Cloud Anthropic 兼容端点按实际 base_url 强制 Bearer（同上方

@@ -2058,6 +2058,9 @@ func (s *RateLimitService) handle529(ctx context.Context, account *Account) {
 
 // UpdateSessionWindow 从成功响应更新5h窗口状态
 func (s *RateLimitService) UpdateSessionWindow(ctx context.Context, account *Account, headers http.Header) {
+	if account.IsClaudeCodeAPIKey() {
+		return
+	}
 	status := headers.Get("anthropic-ratelimit-unified-5h-status")
 	if status == "" {
 		return

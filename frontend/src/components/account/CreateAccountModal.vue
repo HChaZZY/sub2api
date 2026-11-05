@@ -1500,7 +1500,14 @@
       </div>
 
       <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
-      <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
+      <div v-if="form.platform === 'anthropic' && accountCategory === 'oauth-based'">
+        <label class="input-label">鉴权方式</label>
+        <select v-model="claudeAuthMode" class="input" data-testid="claude-auth-mode">
+          <option value="oauth">OAuth / Setup Token</option>
+          <option value="apikey">API Key</option>
+        </select>
+      </div>
+      <div v-if="(form.type === 'apikey' || isClaudeAPIKeyMode) && form.platform !== 'antigravity'" class="space-y-4">
         <div v-if="!isMultiProtocolPlatform || apiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
           <input
@@ -4407,6 +4414,7 @@ const step = ref(1)
 const submitting = ref(false)
 const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock' | 'service_account'>('oauth-based') // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
+const claudeAuthMode = ref<'oauth' | 'apikey'>('oauth')
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
 const upstreamBillingAutoProbeEnabled = ref(true)
@@ -5051,6 +5059,7 @@ const form = reactive({
 
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
+  if (isClaudeAPIKeyMode.value) return false
   // Antigravity upstream 类型不需要 OAuth 流程
   if (form.platform === 'antigravity' && antigravityAccountType.value === 'upstream') {
     return false
@@ -5063,6 +5072,7 @@ const isOAuthFlow = computed(() => {
 })
 
 const isGrokSSOInputMethod = computed(() => form.platform === 'grok' && oauthFlowRef.value?.inputMethod === 'sso_cookie')
+const isClaudeAPIKeyMode = computed(() => form.platform === 'anthropic' && accountCategory.value === 'oauth-based' && claudeAuthMode.value === 'apikey')
 
 const isManualInputMethod = computed(() => {
   return oauthFlowRef.value?.inputMethod === 'manual'
@@ -5640,6 +5650,7 @@ const resetForm = () => {
   form.expires_at = null
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
+  claudeAuthMode.value = 'oauth'
   accountMode.value = 'payg'
   openCodeAccountMode.value = 'zen'
   apiProtocol.value = 'adaptive'
@@ -6234,6 +6245,10 @@ const handleSubmit = async () => {
   }
 
   form.credentials = credentials
+  if (isClaudeAPIKeyMode.value) {
+    form.type = 'oauth'
+    credentials.auth_mode = 'apikey'
+  }
   const extra = buildAnthropicExtra(buildOpenAIExtra())
 
   await doCreateAccount({

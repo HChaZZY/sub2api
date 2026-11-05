@@ -527,13 +527,13 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	var authToken string
 	var apiURL string
 
-	if account.IsOAuth() {
+	if account.IsOAuth() && !account.IsClaudeCodeAPIKey() {
 		apiURL = testClaudeAPIURL
 		authToken = account.GetCredential("access_token")
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No access token available")
 		}
-	} else if account.Type == "apikey" {
+	} else if account.Type == "apikey" || account.IsClaudeCodeAPIKey() {
 		authToken = account.GetCredential("api_key")
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
@@ -584,7 +584,10 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	}
 
 	// Set authentication header
-	if account.IsOAuth() {
+	if account.IsClaudeCodeAPIKey() {
+		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
+		req.Header.Set("x-api-key", authToken)
+	} else if account.IsOAuth() {
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
 	} else {

@@ -1256,6 +1256,17 @@ func (s *GatewayService) hashContent(content string) string {
 
 // GetAccessToken 获取账号凭证
 func (s *GatewayService) GetAccessToken(ctx context.Context, account *Account) (string, string, error) {
+	if account.IsClaudeCodeAPIKey() {
+		if strings.TrimSpace(account.GetCredential("base_url")) == "" {
+			return "", "", errors.New("base_url not found in credentials")
+		}
+		key := account.GetCredential("api_key")
+		if key == "" {
+			return "", "", errors.New("api_key not found in credentials")
+		}
+		// Keep the OAuth protocol path; only its authentication header changes.
+		return key, "oauth", nil
+	}
 	switch account.Type {
 	case AccountTypeOAuth, AccountTypeSetupToken:
 		// Both oauth and setup-token use OAuth token flow

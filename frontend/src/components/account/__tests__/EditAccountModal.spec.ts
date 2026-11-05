@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import {
   BUILTIN_PLATFORM_CATALOG,
   resetPlatformCatalog,
@@ -330,6 +330,22 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 }
 
 describe('EditAccountModal', () => {
+  it('saves Claude Code API key authentication without OAuth tokens', async () => {
+    const account = { ...buildAccount(), platform: 'anthropic', type: 'oauth', credentials: { access_token: 'old-access', refresh_token: 'old-refresh' } } as any
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await flushPromises()
+    await wrapper.get('[data-testid="edit-claude-auth-mode"]').setValue('apikey')
+    await wrapper.get('input[type="url"]').setValue('https://provider.example')
+    await wrapper.get('input[type="password"]').setValue('test-provider-key')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const credentials = updateAccountMock.mock.calls[0]?.[1]?.credentials
+    expect(credentials).toMatchObject({ auth_mode: 'apikey', base_url: 'https://provider.example', api_key: 'test-provider-key' })
+    expect(credentials).not.toHaveProperty('access_token')
+    expect(credentials).not.toHaveProperty('refresh_token')
+  })
   beforeEach(() => {
     authIsSimpleMode.value = true
   })
