@@ -330,6 +330,56 @@ function mountModal(account = buildAccount(), renderGroupSelector = false) {
 }
 
 describe('EditAccountModal', () => {
+  it.each(['oauth', 'setup-token'])('keeps Claude Code API key URL and model settings after saving and reopening %s accounts', async (type) => {
+    const account = {
+      ...buildAccount(), platform: 'anthropic', type,
+      credentials: {
+        auth_mode: 'apikey', base_url: 'https://www.packyapi.ai',
+        model_mapping: { 'claude-opus-5-5': 'claude-opus-5-5' }
+      }
+    } as any
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await flushPromises()
+    expect((wrapper.get('input[type="url"]').element as HTMLInputElement).value).toBe('https://www.packyapi.ai')
+    expect(wrapper.get('[data-testid="claude-code-model-settings"]').text()).toContain('admin.accounts.modelRestriction')
+    const selector = wrapper.getComponent(ModelWhitelistSelectorStub)
+    expect(selector.props('modelValue')).toEqual(['claude-opus-5-5'])
+    selector.vm.$emit('update:modelValue', ['claude-opus-5-5', 'claude-sonnet-4-6'])
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    const credentials = updateAccountMock.mock.calls[0]?.[1]?.credentials
+    expect(credentials).toMatchObject({
+      auth_mode: 'apikey', base_url: 'https://www.packyapi.ai',
+      model_mapping: { 'claude-opus-5-5': 'claude-opus-5-5', 'claude-sonnet-4-6': 'claude-sonnet-4-6' }
+    })
+    expect(credentials).not.toHaveProperty('api_key')
+    wrapper.unmount()
+    const reopened = mountModal({ ...account, credentials })
+    await flushPromises()
+    expect((reopened.get('input[type="url"]').element as HTMLInputElement).value).toBe('https://www.packyapi.ai')
+    expect(reopened.getComponent(ModelWhitelistSelectorStub).props('modelValue')).toEqual(['claude-opus-5-5', 'claude-sonnet-4-6'])
+    reopened.unmount()
+  })
+
+  it('loads and saves Claude Code API key model mappings', async () => {
+    const account = {
+      ...buildAccount(), platform: 'anthropic', type: 'oauth',
+      credentials: { auth_mode: 'apikey', base_url: 'https://www.packyapi.ai', model_mapping: { 'claude-latest': 'claude-opus-5-5' } }
+    } as any
+    updateAccountMock.mockReset().mockResolvedValue(account)
+    checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
+    const wrapper = mountModal(account)
+    await flushPromises()
+    const settings = wrapper.get('[data-testid="claude-code-model-settings"]')
+    await settings.get('input[placeholder="admin.accounts.actualModel"]').setValue('claude-sonnet-4-6')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(updateAccountMock.mock.calls[0]?.[1]?.credentials.model_mapping).toEqual({ 'claude-latest': 'claude-sonnet-4-6' })
+    wrapper.unmount()
+  })
+
   it('saves Claude Code API key authentication without OAuth tokens', async () => {
     const account = { ...buildAccount(), platform: 'anthropic', type: 'oauth', credentials: { access_token: 'old-access', refresh_token: 'old-refresh' } } as any
     updateAccountMock.mockReset().mockResolvedValue(account)

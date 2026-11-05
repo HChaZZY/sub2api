@@ -887,11 +887,11 @@
         </div>
       </div>
 
-      <!-- OpenAI/Grok OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
+      <!-- OAuth accounts and Claude Code API key accounts share model settings. -->
       <div
-        v-if="(account.platform === 'openai' || account.platform === 'grok') && account.type === 'oauth'"
+        v-if="((account.platform === 'openai' || account.platform === 'grok') && account.type === 'oauth') || isClaudeCodeAPIKeyMode"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
-        :data-testid="account.platform === 'grok' ? 'grok-model-settings' : undefined"
+        :data-testid="account.platform === 'grok' ? 'grok-model-settings' : isClaudeCodeAPIKeyMode ? 'claude-code-model-settings' : undefined"
       >
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
@@ -3674,6 +3674,11 @@ const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
 const claudeAuthMode = ref<'oauth' | 'apikey'>('oauth')
+const isClaudeCodeAPIKeyMode = computed(() =>
+  props.account?.platform === 'anthropic' &&
+  (props.account.type === 'oauth' || props.account.type === 'setup-token') &&
+  claudeAuthMode.value === 'apikey'
+)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -5038,10 +5043,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           : newAccount.platform === 'grok'
             ? 'https://api.x.ai/v1'
             : 'https://api.anthropic.com'
-    editBaseUrl.value = platformDefaultUrl
+    editBaseUrl.value = isClaudeCodeAPIKeyMode.value
+      ? String(credentials?.base_url || platformDefaultUrl)
+      : platformDefaultUrl
 
     // Load model mappings for OpenAI/Grok OAuth accounts
-    if ((newAccount.platform === 'openai' || newAccount.platform === 'grok') && newAccount.credentials) {
+    if ((newAccount.platform === 'openai' || newAccount.platform === 'grok' || isClaudeCodeAPIKeyMode.value) && newAccount.credentials) {
       const oauthCredentials = newAccount.credentials as Record<string, unknown>
       loadModelRestrictionFromMapping(oauthCredentials.model_mapping as Record<string, unknown> | undefined)
     } else {
@@ -6438,6 +6445,12 @@ const handleSubmit = async () => {
         credentials.auth_mode = 'apikey'
         credentials.base_url = editBaseUrl.value.trim()
         if (editApiKey.value.trim()) credentials.api_key = editApiKey.value.trim()
+        const modelMapping = buildModelRestrictionMapping()
+        if (modelMapping) {
+          credentials.model_mapping = modelMapping
+        } else {
+          delete credentials.model_mapping
+        }
         delete credentials.access_token
         delete credentials.refresh_token
         delete credentials.expires_at
