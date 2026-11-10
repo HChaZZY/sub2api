@@ -26,6 +26,19 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
+      <div v-if="account.platform === 'anthropic' && (account.type === 'oauth' || account.type === 'setup-token')" class="space-y-4">
+        <div>
+          <label class="input-label">鉴权方式</label>
+          <select v-model="claudeAuthMode" class="input" data-testid="edit-claude-auth-mode">
+            <option value="oauth">OAuth / Setup Token</option>
+            <option value="apikey">API Key</option>
+          </select>
+        </div>
+        <template v-if="claudeAuthMode === 'apikey'">
+          <div><label class="input-label">Base URL</label><input v-model="editBaseUrl" type="url" required class="input" /></div>
+          <div><label class="input-label">API Key</label><input v-model="editApiKey" type="password" autocomplete="new-password" class="input" /></div>
+        </template>
+      </div>
       <!-- API Key fields (only for apikey type) -->
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
@@ -874,11 +887,11 @@
         </div>
       </div>
 
-      <!-- OpenAI/Grok OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
+      <!-- OAuth accounts and Claude Code API key accounts share model settings. -->
       <div
-        v-if="(account.platform === 'openai' || account.platform === 'grok') && account.type === 'oauth'"
+        v-if="((account.platform === 'openai' || account.platform === 'grok') && account.type === 'oauth') || isClaudeCodeAPIKeyMode"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
-        :data-testid="account.platform === 'grok' ? 'grok-model-settings' : undefined"
+        :data-testid="account.platform === 'grok' ? 'grok-model-settings' : isClaudeCodeAPIKeyMode ? 'claude-code-model-settings' : undefined"
       >
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
@@ -3660,6 +3673,12 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const claudeAuthMode = ref<'oauth' | 'apikey'>('oauth')
+const isClaudeCodeAPIKeyMode = computed(() =>
+  props.account?.platform === 'anthropic' &&
+  (props.account.type === 'oauth' || props.account.type === 'setup-token') &&
+  claudeAuthMode.value === 'apikey'
+)
 
 // ── 国产供应商（Kimi / Zhipu / DeepSeek）account_mode / api_protocol 编辑 ──
 // account_mode 决定额度/余额监控路径，api_protocol 决定转发端点与格式；
@@ -4625,6 +4644,11 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
+  claudeAuthMode.value = credentials?.auth_mode === 'apikey' ? 'apikey' : 'oauth'
+  if (newAccount.platform === 'anthropic' && newAccount.type !== 'apikey') {
+    editBaseUrl.value = String(credentials?.base_url || '')
+    editApiKey.value = ''
+  }
   interceptWarmupRequests.value = credentials?.intercept_warmup_requests === true
   autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true
   editVertexProjectId.value = ''
@@ -5019,10 +5043,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           : newAccount.platform === 'grok'
             ? 'https://api.x.ai/v1'
             : 'https://api.anthropic.com'
-    editBaseUrl.value = platformDefaultUrl
+    editBaseUrl.value = isClaudeCodeAPIKeyMode.value
+      ? String(credentials?.base_url || platformDefaultUrl)
+      : platformDefaultUrl
 
     // Load model mappings for OpenAI/Grok OAuth accounts
-    if ((newAccount.platform === 'openai' || newAccount.platform === 'grok') && newAccount.credentials) {
+    if ((newAccount.platform === 'openai' || newAccount.platform === 'grok' || isClaudeCodeAPIKeyMode.value) && newAccount.credentials) {
       const oauthCredentials = newAccount.credentials as Record<string, unknown>
       loadModelRestrictionFromMapping(oauthCredentials.model_mapping as Record<string, unknown> | undefined)
     } else {
@@ -6408,6 +6434,32 @@ const handleSubmit = async () => {
       updatePayload.extra = newExtra
     }
 
+    if (props.account.platform === 'anthropic' && (props.account.type === 'oauth' || props.account.type === 'setup-token')) {
+      const previous = (props.account.credentials || {}) as Record<string, unknown>
+      const credentials = { ...previous, ...((updatePayload.credentials || {}) as Record<string, unknown>) }
+      if (claudeAuthMode.value === 'apikey') {
+        if (!editBaseUrl.value.trim() || (previous.auth_mode !== 'apikey' && !editApiKey.value.trim())) {
+          appStore.showError('请填写 Base URL 和 API Key')
+          return
+        }
+        credentials.auth_mode = 'apikey'
+        credentials.base_url = editBaseUrl.value.trim()
+        if (editApiKey.value.trim()) credentials.api_key = editApiKey.value.trim()
+        const modelMapping = buildModelRestrictionMapping()
+        if (modelMapping) {
+          credentials.model_mapping = modelMapping
+        } else {
+          delete credentials.model_mapping
+        }
+        delete credentials.access_token
+        delete credentials.refresh_token
+        delete credentials.expires_at
+      } else {
+        delete credentials.auth_mode
+        delete credentials.api_key
+      }
+      updatePayload.credentials = credentials
+    }
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)
     })

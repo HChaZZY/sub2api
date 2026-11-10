@@ -368,6 +368,9 @@ func (s *AccountUsageService) getUsageForAccount(ctx context.Context, account *A
 	if err := scopedAccountAccess(ctx, s.accountRepo, account, "accounts.usage.read", true); err != nil {
 		return nil, err
 	}
+	if account.IsClaudeCodeAPIKey() {
+		return &UsageInfo{}, nil
+	}
 	if account == nil {
 		return nil, fmt.Errorf("account is required")
 	}
@@ -638,6 +641,9 @@ func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int
 func (s *AccountUsageService) getPassiveUsageForAccount(ctx context.Context, account *Account) (*UsageInfo, error) {
 	if err := scopedAccountAccess(ctx, s.accountRepo, account, "accounts.usage.read", false); err != nil {
 		return nil, err
+	}
+	if account.IsClaudeCodeAPIKey() {
+		return &UsageInfo{}, nil
 	}
 	if !supportsAnthropicPassiveUsage(account) {
 		return nil, fmt.Errorf("passive usage only supported for Anthropic OAuth/SetupToken accounts")

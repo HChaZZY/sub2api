@@ -359,7 +359,13 @@ func (a *Account) IsGeminiThirdPartyAPIKey() bool {
 }
 
 func (a *Account) CanGetUsage() bool {
-	return a.Type == AccountTypeOAuth
+	return a.Type == AccountTypeOAuth && !a.IsClaudeCodeAPIKey()
+}
+
+// IsClaudeCodeAPIKey keeps Claude Code account capabilities while replacing
+// OAuth credentials with an upstream API key. It has no OAuth usage windows.
+func (a *Account) IsClaudeCodeAPIKey() bool {
+	return a != nil && a.Platform == PlatformAnthropic && a.IsOAuth() && a.GetCredential("auth_mode") == "apikey"
 }
 
 func (a *Account) GetCredential(key string) string {
@@ -1088,7 +1094,7 @@ func (a *Account) ResolveCompactMappedModel(requestedModel string) (mappedModel 
 }
 
 func (a *Account) GetBaseURL() string {
-	if a.Type != AccountTypeAPIKey {
+	if a.Type != AccountTypeAPIKey && !a.IsClaudeCodeAPIKey() {
 		return ""
 	}
 	baseURL := a.GetCredential("base_url")
@@ -2563,6 +2569,9 @@ func (a *Account) IsSessionIDMaskingEnabled() bool {
 // IsCustomBaseURLEnabled 检查是否启用自定义 base URL 中继转发
 // 仅适用于 Anthropic OAuth/SetupToken 类型账号
 func (a *Account) IsCustomBaseURLEnabled() bool {
+	if a.IsClaudeCodeAPIKey() {
+		return false
+	}
 	if !a.IsAnthropicOAuthOrSetupToken() {
 		return false
 	}

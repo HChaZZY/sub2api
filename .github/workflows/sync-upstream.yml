@@ -1,0 +1,51 @@
+name: Weekly upstream draft PR
+
+on:
+  schedule:
+    - cron: '0 22 * * 0' # Monday 06:00 Asia/Shanghai
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-upstream-draft
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+    steps:
+      - name: Check sync credentials
+        shell: bash
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo '::error::Set the UPSTREAM_SYNC_TOKEN repository secret with Contents, Pull requests, and Workflows write permissions.'
+            exit 1
+          fi
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.UPSTREAM_SYNC_TOKEN }}
+      - name: Update upstream snapshot and draft PR
+        shell: bash
+        run: |
+          git remote add upstream https://github.com/Wei-Shaw/sub2api.git
+          git fetch --no-tags upstream refs/heads/main:refs/remotes/upstream/main
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo 'Upstream main is already included.'
+            exit 0
+          fi
+          branch=sync/upstream-main
+          previous=$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)
+          git push "--force-with-lease=refs/heads/$branch:$previous" origin "upstream/main:refs/heads/$branch"
+          existing=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "Updated existing upstream draft PR #$existing"
+            exit 0
+          fi
+          printf 'Weekly upstream main snapshot for review.\n\nUpstream commit: `%s`\n\nMerge into main after reviewing compatibility with the custom Claude Code API key mode.\n' "$(git rev-parse upstream/main)" > "$RUNNER_TEMP/upstream-pr.md"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$branch" --draft --title 'chore: sync upstream main' --body-file "$RUNNER_TEMP/upstream-pr.md"

@@ -747,7 +747,7 @@ go generate ./cmd/server
 
 ## OpenAI 图片模型
 
-支持 `gpt-image-2.6-flare`、`gpt-image-2.6-sunburst`，以及 `gpt-image-2.5-flare`、`gpt-image-2.5-sunburst` 和 2.5 的 `2026-09-08` 日期快照，可通过 `/v1/images/generations`、`/v1/images/edits` 调用。保留显式 `complexity`（`low` / `medium` / `high`）；省略时不注入默认值。`quality`、自定义尺寸和图片 usage 明细保持透传。
+支持 `gpt-image-2.6-flare`、`gpt-image-2.6-sunburst`，以及 `gpt-image-2.5-flare`、`gpt-image-2.5-sunburst` 和 2.5 的 `2026-09-08` 日期快照，可通过 `/v1/images/generations`、`/v1/images/edits` 调用。JSON 生图、JSON 改图和 multipart 改图均保留显式 `complexity`（`low` / `medium` / `high`），该字段独立于 `quality`；省略时不注入默认值。`quality`、自定义尺寸和图片 usage 明细保持透传。
 
 OAuth / Setup Token 的 1.5、2、2.5 和 2.6 图片请求使用 Codex 原生 Images 端点。旧模型遇到端点 404 / 405 时仍可回退到 Responses；2.6 不回退，避免桥接层忽略图片模型或注入不支持的 `complexity`。其余模型继续通过 Responses 的 `image_generation` 工具调用，默认文本主控为 `gpt-5.6-luna`，可设置 `SUB2API_IMAGES_MAIN_MODEL` 切换。该配置仅影响 Responses 桥接。
 

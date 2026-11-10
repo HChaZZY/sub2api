@@ -56,6 +56,16 @@ func (p *ClaudeTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	if account == nil {
 		return "", errors.New("account is nil")
 	}
+	if account.IsClaudeCodeAPIKey() {
+		if strings.TrimSpace(account.GetCredential("base_url")) == "" {
+			return "", errors.New("base_url not found in credentials")
+		}
+		key := account.GetCredential("api_key")
+		if key == "" {
+			return "", errors.New("api_key not found in credentials")
+		}
+		return key, nil
+	}
 	if account.Platform != PlatformAnthropic || (account.Type != AccountTypeOAuth && account.Type != AccountTypeServiceAccount) {
 		return "", errors.New("not an anthropic oauth or service account")
 	}

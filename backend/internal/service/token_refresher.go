@@ -44,7 +44,7 @@ func (r *ClaudeTokenRefresher) CacheKey(account *Account) string {
 // 此处与手动刷新入口（account.IsOAuth()）保持一致，实际是否刷新由 NeedsRefresh
 // 基于 expires_at 门控，并在分布式锁保护下执行，不会造成过度刷新。
 func (r *ClaudeTokenRefresher) CanRefresh(account *Account) bool {
-	return account.Platform == PlatformAnthropic && account.IsOAuth()
+	return account.Platform == PlatformAnthropic && account.IsOAuth() && !account.IsClaudeCodeAPIKey()
 }
 
 // NeedsRefresh 检查token是否需要刷新
